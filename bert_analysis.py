@@ -13,6 +13,9 @@ data_pd = data_pd[data_pd['ResponseM'].notnull()]
 classifier = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
 
 def detect_language_transformer(text):
+    """
+    Given a list of texts, returns their langauge, which is one of 'en', 'fr'.
+    """
     result = classifier(text[:512], return_all_scores=True)  # Get all probabilities
     scores = {x['label']: x['score'] for x in result[0]}
 
@@ -39,9 +42,6 @@ label_map = {
     "positive": "positive"
 }
 
-
-
-#preprocessing
 english_data = data_pd[data_pd['language'] == 'en']['ResponseM'].astype(str).to_list()
 french_data = data_pd[data_pd['language'] == 'fr']['ResponseM'].astype(str).to_list()
 
@@ -50,6 +50,9 @@ results_en = []
 results_fr = []
 
 def get_sentiment_scores(texts, tokenizer, model, alpha=2.0, batch_size=32):
+    """
+    Given a collection of texts, a tokenizer, and a model, return the the classified text labels as a list.
+    """
     all_results = []
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
@@ -61,10 +64,6 @@ def get_sentiment_scores(texts, tokenizer, model, alpha=2.0, batch_size=32):
         
         adjusted_probs = torch.pow(raw_probs, alpha)
         adjusted_probs = adjusted_probs / adjusted_probs.sum(dim=-1, keepdim=True)
-
-
-        
-        
         for probs in adjusted_probs:
             # Assuming the model output is [neg, neu, pos]
             all_results.append({
@@ -74,13 +73,10 @@ def get_sentiment_scores(texts, tokenizer, model, alpha=2.0, batch_size=32):
             })
     return all_results
 
-
-
-# ----- English Model -----
 model_name_en = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 tokenizer_en = AutoTokenizer.from_pretrained(model_name_en)
 model_en = AutoModelForSequenceClassification.from_pretrained(model_name_en)
-model_en.eval()  # set model to evaluation mode
+model_en.eval() 
 
 model_name_fr = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
 tokenizer_fr = AutoTokenizer.from_pretrained(model_name_fr)
@@ -93,16 +89,13 @@ french_data  = data_pd[data_pd['language'] == 'fr']['ResponseM'].astype(str).to_
 results_en = get_sentiment_scores(english_data, tokenizer_en, model_en, batch_size=32)
 results_fr = get_sentiment_scores(french_data, tokenizer_fr, model_fr,batch_size=32)
 
-# Masks to select English or French rows
 english_mask = (data_pd['language'] == 'en')
 french_mask  = (data_pd['language'] == 'fr')
 
-# 1) Insert English sentiment columns
 data_pd.loc[english_mask, 'negative'] = [r["negative"] for r in results_en]
 data_pd.loc[english_mask, 'neutral']  = [r["neutral"]  for r in results_en]
 data_pd.loc[english_mask, 'positive'] = [r["positive"] for r in results_en]
 
-# 2) Insert French sentiment columns
 data_pd.loc[french_mask, 'negative'] = [r["negative"] for r in results_fr]
 data_pd.loc[french_mask, 'neutral']  = [r["neutral"]  for r in results_fr]
 data_pd.loc[french_mask, 'positive'] = [r["positive"] for r in results_fr]
